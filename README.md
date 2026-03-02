@@ -1,6 +1,6 @@
 # 🎵 TuneGrab
 
-> **By [MrNaNo]([(https://github.com/NaNoDev101/)]) — N4N0 Staff**
+> **By [MrNaNo](https://github.com/NaNoDev101/) — N4N0 Staff**
 
 A clean, self-hosted YouTube playlist & video MP3 downloader with a modern web UI. Paste any YouTube URL, preview your tracks, select what you want, and download a ready-to-use ZIP of MP3s — all from your browser.
 

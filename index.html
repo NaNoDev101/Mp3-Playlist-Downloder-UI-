@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>TUNEGRAB — YouTube → MP3</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0a0a0f;
+  --surface: #12121a;
+  --surface2: #16161f;
+  --border: #1e1e2e;
+  --accent: #ff3b5c;
+  --accent2: #ff8c42;
+  --green: #00e5a0;
+  --blue: #4d9fff;
+  --text: #f0f0f5;
+  --muted: #555570;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Mono', monospace;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow-x: hidden;
+}
+
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background-image:
+    linear-gradient(rgba(255,59,92,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,59,92,0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none; z-index: 0;
+}
+
+.glow { position: fixed; width: 700px; height: 700px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,59,92,0.1) 0%, transparent 70%);
+  top: -300px; left: 50%; transform: translateX(-50%);
+  pointer-events: none; z-index: 0;
+  animation: pulse 6s ease-in-out infinite; }
+@keyframes pulse { 0%,100%{opacity:.5;transform:translateX(-50%) scale(1)} 50%{opacity:1;transform:translateX(-50%) scale(1.1)} }
+
+.container { position: relative; z-index: 1; width: 100%; max-width: 720px; padding: 50px 20px 80px; }
+
+/* ── Header ── */
+.header { text-align: center; margin-bottom: 44px; }
+.logo { font-family: 'Syne', sans-serif; font-size: 48px; font-weight: 800; letter-spacing: -2px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+.tagline { margin-top: 8px; color: var(--muted); font-size: 12px; letter-spacing: 3px; text-transform: uppercase; }
+
+/* ── Card ── */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+  padding: 28px; margin-bottom: 16px; position: relative; overflow: hidden; }
+.card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, var(--accent), var(--accent2), transparent); }
+
+.label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+
+/* ── URL row ── */
+.url-row { display: flex; gap: 10px; }
+.url-input { flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
+  padding: 13px 15px; color: var(--text); font-family: 'DM Mono', monospace; font-size: 13px; outline: none; transition: border-color .2s; }
+.url-input::placeholder { color: var(--muted); }
+.url-input:focus { border-color: var(--accent); }
+
+.btn { background: linear-gradient(135deg, var(--accent), var(--accent2)); border: none; border-radius: 10px;
+  padding: 13px 20px; color: #fff; font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700;
+  cursor: pointer; transition: opacity .2s, transform .15s; white-space: nowrap; }
+.btn:hover { opacity: .9; transform: translateY(-1px); }
+.btn:active { transform: translateY(0); }
+.btn:disabled { opacity: .35; cursor: not-allowed; transform: none; }
+
+/* ── Quality ── */
+.quality-row { display: flex; gap: 8px; margin-top: 18px; }
+.qbtn { flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+  padding: 9px 6px; color: var(--muted); font-family: 'DM Mono', monospace; font-size: 11px;
+  cursor: pointer; transition: all .2s; text-align: center; }
+.qbtn.active { border-color: var(--accent); color: var(--accent); background: rgba(255,59,92,.08); }
+.qbtn:hover:not(.active) { border-color: var(--muted); color: var(--text); }
+
+/* ── Track list ── */
+#trackSection { display: none; margin-top: 20px; animation: fadeIn .4s ease; }
+#trackSection.show { display: block; }
+
+.track-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.track-header-title { font-family: 'Syne', sans-serif; font-size: 15px; font-weight: 700; color: var(--text); }
+.track-actions { display: flex; gap: 8px; }
+.small-btn { background: none; border: 1px solid var(--border); border-radius: 6px;
+  padding: 5px 10px; font-size: 10px; color: var(--muted); font-family: 'DM Mono', monospace;
+  cursor: pointer; transition: all .15s; }
+.small-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+.track-list { max-height: 360px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;
+  scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+.track-list::-webkit-scrollbar { width: 4px; }
+.track-list::-webkit-scrollbar-track { background: transparent; }
+.track-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.track-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px;
+  border-radius: 8px; border: 1px solid transparent; cursor: pointer;
+  transition: background .15s, border-color .15s; user-select: none; }
+.track-item:hover { background: rgba(255,255,255,.03); border-color: var(--border); }
+.track-item.checked { background: rgba(255,59,92,.06); border-color: rgba(255,59,92,.2); }
+
+.track-checkbox { width: 16px; height: 16px; min-width: 16px; border: 1.5px solid var(--muted);
+  border-radius: 4px; display: flex; align-items: center; justify-content: center;
+  transition: all .15s; font-size: 10px; }
+.track-item.checked .track-checkbox { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+.track-num { font-size: 10px; color: var(--muted); min-width: 24px; text-align: right; }
+.track-title { flex: 1; font-size: 12px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.track-dur { font-size: 11px; color: var(--muted); white-space: nowrap; }
+
+.selected-count { font-size: 11px; color: var(--muted); margin-top: 10px; }
+.selected-count span { color: var(--accent); }
+
+/* ── Progress ── */
+#progressSection { display: none; margin-top: 24px; }
+#progressSection.show { display: block; animation: fadeIn .4s ease; }
+
+.phase-tabs { display: flex; gap: 0; margin-bottom: 20px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.phase-tab { flex: 1; padding: 8px; text-align: center; font-size: 10px; letter-spacing: 1px;
+  text-transform: uppercase; color: var(--muted); background: var(--bg); transition: all .3s; }
+.phase-tab.active { background: rgba(255,59,92,.12); color: var(--accent); }
+.phase-tab.done { background: rgba(0,229,160,.08); color: var(--green); }
+
+.prog-block { margin-bottom: 18px; }
+.prog-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+.prog-label { font-size: 11px; color: var(--muted); }
+.prog-pct { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 800; }
+.prog-pct.dl  { color: var(--accent); }
+.prog-pct.cv  { color: var(--blue); }
+
+.bar-bg { background: var(--border); border-radius: 100px; height: 5px; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 100px; width: 0%; transition: width .4s ease; }
+.bar-fill.dl { background: linear-gradient(90deg, var(--accent), var(--accent2)); }
+.bar-fill.cv { background: linear-gradient(90deg, var(--blue), #a78bfa); }
+
+.current-track-label { margin-top: 10px; font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.current-track-label span { color: var(--text); }
+.meta-row { display: flex; justify-content: space-between; margin-top: 6px; font-size: 10px; color: var(--muted); }
+
+/* ── Done ── */
+#doneSection { display: none; text-align: center; padding: 20px 0 8px; }
+#doneSection.show { display: block; animation: fadeIn .5s ease; }
+.done-icon { font-size: 44px; margin-bottom: 10px; }
+.done-title { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 800; color: var(--green); margin-bottom: 4px; }
+.done-sub { font-size: 12px; color: var(--muted); margin-bottom: 18px; }
+.btn-dl { background: linear-gradient(135deg, var(--green), #00b37a); color: #0a0a0f;
+  font-family: 'Syne', sans-serif; font-weight: 800; font-size: 14px; border: none;
+  border-radius: 12px; padding: 15px 32px; cursor: pointer; text-decoration: none;
+  display: inline-block; transition: opacity .2s, transform .15s; }
+.btn-dl:hover { opacity: .9; transform: translateY(-2px); }
+
+/* ── Error ── */
+.error-msg { background: rgba(255,59,92,.08); border: 1px solid rgba(255,59,92,.3);
+  border-radius: 10px; padding: 12px 15px; font-size: 12px; color: var(--accent);
+  margin-top: 14px; display: none; }
+.error-msg.show { display: block; animation: fadeIn .3s ease; }
+
+/* ── CTA ── */
+#ctaRow { margin-top: 20px; }
+.btn-full { width: 100%; padding: 15px; font-size: 14px; }
+
+/* ── Setup ── */
+.setup { background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  padding: 22px; font-size: 12px; color: var(--muted); line-height: 2; }
+.setup-title { font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 10px; }
+code { background: var(--bg); border: 1px solid var(--border); border-radius: 5px;
+  padding: 2px 7px; color: var(--accent2); font-family: 'DM Mono', monospace; }
+
+@keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+.spinner { display:inline-block; width:13px; height:13px; border:2px solid rgba(255,255,255,.2);
+  border-top-color:#fff; border-radius:50%; animation:spin .7s linear infinite; vertical-align:middle; margin-right:5px; }
+@keyframes spin { to{transform:rotate(360deg)} }
+</style>
+</head>
+<body>
+<div class="glow"></div>
+<div class="container">
+
+  <header class="header">
+    <div class="logo">TUNEGRAB</div>
+    <div class="tagline">YouTube &rarr; MP3 &nbsp;·&nbsp; Select &amp; Download</div>
+  </header>
+
+  <div class="card">
+    <!-- URL input -->
+    <div class="label">Playlist or Video URL</div>
+    <div class="url-row">
+      <input class="url-input" id="urlInput" type="text"
+        placeholder="https://youtube.com/playlist?list=..."
+        autocomplete="off" spellcheck="false"/>
+      <button class="btn" id="fetchBtn" onclick="fetchInfo()">LOAD</button>
+    </div>
+
+    <!-- Quality -->
+    <div class="label" style="margin-top:18px;">Audio Quality</div>
+    <div class="quality-row">
+      <button class="qbtn" onclick="setQuality('low',this)">96 kbps<br/><small style="color:#333">small</small></button>
+      <button class="qbtn active" onclick="setQuality('medium',this)">192 kbps<br/><small style="color:#333">standard</small></button>
+      <button class="qbtn" onclick="setQuality('high',this)">320 kbps<br/><small style="color:#333">hifi</small></button>
+    </div>
+
+    <!-- Error -->
+    <div class="error-msg" id="errorMsg"></div>
+
+    <!-- Track list -->
+    <div id="trackSection">
+      <div class="track-header">
+        <div class="track-header-title" id="playlistTitle">Tracks</div>
+        <div class="track-actions">
+          <button class="small-btn" onclick="selectAll()">Select All</button>
+          <button class="small-btn" onclick="selectNone()">None</button>
+          <button class="small-btn" onclick="invertSelection()">Invert</button>
+        </div>
+      </div>
+      <div class="track-list" id="trackList"></div>
+      <div class="selected-count"><span id="selCount">0</span> of <span id="totalCount">0</span> tracks selected</div>
+    </div>
+
+    <!-- Progress -->
+    <div id="progressSection">
+      <!-- Phase tabs -->
+      <div class="phase-tabs">
+        <div class="phase-tab" id="tabDl">⬇ Download</div>
+        <div class="phase-tab" id="tabCv">⚙ Convert</div>
+        <div class="phase-tab" id="tabZip">📦 Package</div>
+      </div>
+
+      <!-- Download bar -->
+      <div class="prog-block" id="dlBlock">
+        <div class="prog-row">
+          <div class="prog-label">DOWNLOADING <span id="dlCount" style="color:var(--text)"></span></div>
+          <div class="prog-pct dl" id="dlPct">0%</div>
+        </div>
+        <div class="bar-bg"><div class="bar-fill dl" id="dlBar"></div></div>
+        <div class="current-track-label" id="dlTrack">Starting...</div>
+        <div class="meta-row">
+          <span id="speedVal"></span>
+          <span id="etaVal"></span>
+        </div>
+      </div>
+
+      <!-- Convert bar -->
+      <div class="prog-block" id="cvBlock">
+        <div class="prog-row">
+          <div class="prog-label">CONVERTING TO MP3 <span id="cvCount" style="color:var(--text)"></span></div>
+          <div class="prog-pct cv" id="cvPct">0%</div>
+        </div>
+        <div class="bar-bg"><div class="bar-fill cv" id="cvBar"></div></div>
+        <div class="current-track-label" id="cvTrack"></div>
+      </div>
+    </div>
+
+    <!-- Done -->
+    <div id="doneSection">
+      <div class="done-icon">🎵</div>
+      <div class="done-title">Ready to Download!</div>
+      <div class="done-sub" id="doneSub"></div>
+      <a class="btn-dl" id="downloadLink" href="#" target="_blank">⬇ DOWNLOAD ZIP</a>
+    </div>
+
+    <!-- CTA -->
+    <div id="ctaRow">
+      <button class="btn btn-full" id="startBtn" onclick="startDownload()" disabled>
+        START DOWNLOAD
+      </button>
+    </div>
+  </div>
+
+  <!-- Setup -->
+  <div class="setup">
+    <div class="setup-title">⚙️ Setup</div>
+    1. <code>pip install flask yt-dlp flask-cors</code><br/>
+    2. Install FFmpeg → <code>ffmpeg.org/download.html</code><br/>
+    3. <code>python app.py</code><br/>
+    4. Open <code>index.html</code> in browser
+  </div>
+
+</div>
+
+<script>
+const API = 'http://localhost:5000/api';
+let quality = 'medium';
+let allTracks = [];
+let selectedIndices = new Set();
+let jobId = null;
+let pollInterval = null;
+let playlistTitle = '';
+
+function setQuality(q, el) {
+  quality = q;
+  document.querySelectorAll('.qbtn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+}
+
+function showError(msg) {
+  const el = document.getElementById('errorMsg');
+  el.textContent = '⚠ ' + msg;
+  el.classList.add('show');
+}
+function hideError() { document.getElementById('errorMsg').classList.remove('show'); }
+
+function fmtDuration(secs) {
+  if (!secs) return '';
+  secs = Math.floor(secs);
+  const m = Math.floor(secs / 60), s = secs % 60;
+  const h = Math.floor(m / 60), mm = m % 60;
+  if (h) return `${h}:${String(mm).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  return `${m}:${String(s).padStart(2,'0')}`;
+}
+
+async function fetchInfo() {
+  const url = document.getElementById('urlInput').value.trim();
+  if (!url) { showError('Please enter a URL.'); return; }
+
+  hideError();
+  resetUI();
+
+  const btn = document.getElementById('fetchBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>LOADING';
+
+  try {
+    const res = await fetch(`${API}/info`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url })
+    });
+    if (!res.ok) throw new Error('Cannot reach backend — is app.py running?');
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    allTracks = data.tracks || [];
+    playlistTitle = data.title || 'Playlist';
+    selectedIndices = new Set(allTracks.map((_, i) => i));
+
+    document.getElementById('playlistTitle').textContent = playlistTitle;
+    document.getElementById('trackSection').classList.add('show');
+    renderTracks();
+    document.getElementById('startBtn').disabled = false;
+
+  } catch (e) {
+    showError(e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'LOAD';
+  }
+}
+
+function renderTracks() {
+  const list = document.getElementById('trackList');
+  list.innerHTML = '';
+  allTracks.forEach((t, i) => {
+    const item = document.createElement('div');
+    item.className = 'track-item' + (selectedIndices.has(i) ? ' checked' : '');
+    item.dataset.idx = i;
+    item.innerHTML = `
+      <div class="track-checkbox">${selectedIndices.has(i) ? '✓' : ''}</div>
+      <div class="track-num">${i + 1}</div>
+      <div class="track-title" title="${escHtml(t.title)}">${escHtml(t.title)}</div>
+      <div class="track-dur">${fmtDuration(t.duration)}</div>
+    `;
+    item.onclick = () => toggleTrack(i);
+    list.appendChild(item);
+  });
+  updateCount();
+}
+
+function toggleTrack(i) {
+  if (selectedIndices.has(i)) selectedIndices.delete(i);
+  else selectedIndices.add(i);
+  const item = document.querySelector(`.track-item[data-idx="${i}"]`);
+  if (item) {
+    item.classList.toggle('checked', selectedIndices.has(i));
+    item.querySelector('.track-checkbox').textContent = selectedIndices.has(i) ? '✓' : '';
+  }
+  updateCount();
+  document.getElementById('startBtn').disabled = selectedIndices.size === 0;
+}
+
+function selectAll()    { allTracks.forEach((_, i) => selectedIndices.add(i));    renderTracks(); document.getElementById('startBtn').disabled = false; }
+function selectNone()   { selectedIndices.clear(); renderTracks(); document.getElementById('startBtn').disabled = true; }
+function invertSelection() { allTracks.forEach((_, i) => selectedIndices.has(i) ? selectedIndices.delete(i) : selectedIndices.add(i)); renderTracks(); document.getElementById('startBtn').disabled = selectedIndices.size === 0; }
+
+function updateCount() {
+  document.getElementById('selCount').textContent = selectedIndices.size;
+  document.getElementById('totalCount').textContent = allTracks.length;
+}
+
+function escHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function resetUI() {
+  document.getElementById('trackSection').classList.remove('show');
+  document.getElementById('progressSection').classList.remove('show');
+  document.getElementById('doneSection').classList.remove('show');
+  document.getElementById('startBtn').disabled = true;
+  allTracks = [];
+  selectedIndices.clear();
+}
+
+async function startDownload() {
+  if (selectedIndices.size === 0) return;
+  hideError();
+
+  const selected = [...selectedIndices].sort((a,b)=>a-b).map(i => allTracks[i]);
+
+  document.getElementById('startBtn').disabled = true;
+  document.getElementById('fetchBtn').disabled = true;
+  document.getElementById('trackSection').classList.remove('show');
+  document.getElementById('doneSection').classList.remove('show');
+  document.getElementById('progressSection').classList.add('show');
+
+  // Reset bars
+  setBar('dl', 0); setBar('cv', 0);
+  document.getElementById('dlPct').textContent = '0%';
+  document.getElementById('cvPct').textContent = '0%';
+  document.getElementById('dlCount').textContent = '';
+  document.getElementById('cvCount').textContent = '';
+  setPhase('download');
+
+  try {
+    const res = await fetch(`${API}/download`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tracks: selected, quality, playlist_title: playlistTitle })
+    });
+    if (!res.ok) throw new Error('Backend error — is app.py running?');
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    jobId = data.job_id;
+    pollInterval = setInterval(pollStatus, 1000);
+
+  } catch (e) {
+    showError(e.message);
+    document.getElementById('progressSection').classList.remove('show');
+    document.getElementById('startBtn').disabled = false;
+    document.getElementById('fetchBtn').disabled = false;
+    document.getElementById('trackSection').classList.add('show');
+  }
+}
+
+function setBar(type, pct) {
+  document.getElementById(type + 'Bar').style.width = pct + '%';
+}
+
+function setPhase(phase) {
+  ['tabDl','tabCv','tabZip'].forEach(id => {
+    document.getElementById(id).classList.remove('active','done');
+  });
+  const map = { download: 'tabDl', convert: 'tabCv', zip: 'tabZip', done: null };
+  const phases = ['download','convert','zip'];
+  const idx = phases.indexOf(phase);
+  phases.forEach((p, i) => {
+    const tabId = ['tabDl','tabCv','tabZip'][i];
+    if (i < idx) document.getElementById(tabId).classList.add('done');
+    else if (i === idx) document.getElementById(tabId).classList.add('active');
+  });
+}
+
+async function pollStatus() {
+  if (!jobId) return;
+  try {
+    const res = await fetch(`${API}/status/${jobId}`);
+    const d = await res.json();
+
+    const phase = d.phase || 'download';
+    setPhase(phase);
+
+    // Download bar
+    const dlPct = d.progress || 0;
+    setBar('dl', dlPct);
+    document.getElementById('dlPct').textContent = dlPct + '%';
+    if (d.downloaded >= 0 && d.total > 0)
+      document.getElementById('dlCount').textContent = `${d.downloaded}/${d.total}`;
+    if (d.current_track && phase === 'download')
+      document.getElementById('dlTrack').innerHTML = `▶ <span>${escHtml(d.current_track)}</span>`;
+    document.getElementById('speedVal').textContent = d.speed ? `⚡ ${d.speed}` : '';
+    document.getElementById('etaVal').textContent   = d.eta   ? `⏱ ${d.eta}` : '';
+
+    // Convert bar
+    const cvPct = d.convert_progress || 0;
+    setBar('cv', cvPct);
+    document.getElementById('cvPct').textContent = cvPct + '%';
+    if (d.converted >= 0 && d.total > 0)
+      document.getElementById('cvCount').textContent = `${d.converted}/${d.total}`;
+    if (d.current_track && (phase === 'convert' || phase === 'zip'))
+      document.getElementById('cvTrack').innerHTML = `⚙ <span>${escHtml(d.current_track)}</span>`;
+
+    if (d.status === 'done') {
+      clearInterval(pollInterval);
+      setPhase('done');
+      ['tabDl','tabCv','tabZip'].forEach(id => {
+        document.getElementById(id).classList.remove('active');
+        document.getElementById(id).classList.add('done');
+      });
+      document.getElementById('progressSection').classList.remove('show');
+      document.getElementById('doneSection').classList.add('show');
+      document.getElementById('doneSub').textContent =
+        `${d.track_count || d.total} tracks converted · ${playlistTitle}`;
+      document.getElementById('downloadLink').href = `${API}/file/${jobId}`;
+      document.getElementById('startBtn').disabled = false;
+      document.getElementById('fetchBtn').disabled = false;
+    }
+
+    if (d.status === 'error') {
+      clearInterval(pollInterval);
+      showError(d.error || 'Something went wrong.');
+      document.getElementById('progressSection').classList.remove('show');
+      document.getElementById('trackSection').classList.add('show');
+      document.getElementById('startBtn').disabled = false;
+      document.getElementById('fetchBtn').disabled = false;
+    }
+
+  } catch (e) {
+    clearInterval(pollInterval);
+    showError('Lost connection to backend.');
+  }
+}
+
+document.getElementById('urlInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') fetchInfo();
+});
+</script>
+</body>
+</html>
